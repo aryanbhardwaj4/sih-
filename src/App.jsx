@@ -270,8 +270,12 @@ export default function App() {
             </div>
             <div className="gauge" aria-label={`AQI ${activeStation.aqi}, ${live.name}`}>
               <div className="gauge-ring" style={{ borderColor: live.color }}>
-                <div className="gauge-value">{activeStation.aqi ?? "--"}</div>
-                <div className="gauge-label">{live.name.toLowerCase()}</div>
+                <div className="gauge-value" style={{ color: "#000000" }}>
+                  {activeStation.aqi ?? "--"}
+                </div>
+                <div className="gauge-label" style={{ color: "#000000" }}>
+                  {live.name.toLowerCase()}
+                </div>
               </div>
             </div>
           </div>
