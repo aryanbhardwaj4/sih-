@@ -333,6 +333,18 @@
   font-weight: 500;
 }
 
+.forecast-when small {
+  display: block;
+  margin-top: 2px;
+  color: #6b6b72;
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.theme-dark .forecast-when small {
+  color: #a9c5b1;
+}
+
 .metric-icon-wrap {
   position: absolute;
   left: 24px;

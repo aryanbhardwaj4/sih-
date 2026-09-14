@@ -17,13 +17,6 @@ const STATIONS = [
   { id: "faridabad-ballabgarh", name: "Faridabad Ballabgarh", lat: 28.340, lng: 77.317 },
 ];
 
-const FORECAST = [
-  { label: "Now", aqi: 150, band: "Moderate", tone: "orange" },
-  { label: "+24h", aqi: 168, band: "Moderate", tone: "orange" },
-  { label: "+48h", aqi: 211, band: "Poor", tone: "red" },
-  { label: "+72h", aqi: 184, band: "Moderate", tone: "orange" },
-];
-
 const STUBBLE_SOURCES = [
   { name: "Haryana belt", lat: 29.15, lng: 76.65 },
   { name: "Punjab belt", lat: 30.85, lng: 75.55 },
@@ -130,6 +123,30 @@ function pm25ToUsAqi(pm25) {
   return Math.round(((aqiHigh - aqiLow) / (high - low)) * (pm25 - low) + aqiLow);
 }
 
+function historyFromHourlyData(hourly) {
+  const times = hourly?.time || [];
+  const pm25Values = hourly?.pm2_5 || [];
+  const available = times
+    .map((time, index) => ({ time, aqi: pm25ToUsAqi(Number(pm25Values[index])) }))
+    .filter((point) => Number.isFinite(point.aqi));
+  if (!available.length) return [];
+
+  const latestIndex = available.length - 1;
+  return [72, 48, 24, 0].map((hoursAgo) => {
+    const point = available[Math.max(0, latestIndex - hoursAgo)];
+    const date = new Date(point.time);
+    return {
+      label: hoursAgo === 0 ? "Now" : `-${hoursAgo}h`,
+      time: hoursAgo === 0
+        ? "Latest reading"
+        : date.toLocaleString([], { weekday: "short", hour: "numeric" }),
+      aqi: point.aqi,
+      band: bandForAqi(point.aqi).name,
+      tone: point.aqi > 200 ? "red" : "orange",
+    };
+  });
+}
+
 export default function App() {
   const [darkMode, setDarkMode] = useState(() => {
     return window.localStorage.getItem("delhi-aqi-theme") === "dark";
@@ -140,6 +157,8 @@ export default function App() {
   const [activeStationId, setActiveStationId] = useState(STATIONS[0].id);
   const [alertLimit, setAlertLimit] = useState(150);
   const [dataStatus, setDataStatus] = useState("loading");
+  const [history, setHistory] = useState([]);
+  const [historyStatus, setHistoryStatus] = useState("loading");
   const activeStation = stations.find((station) => station.id === activeStationId) || stations[0];
   const live = useMemo(() => bandForAqi(activeStation.aqi), [activeStation.aqi]);
   const alertActive = activeStation.aqi >= alertLimit;
@@ -185,6 +204,35 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHistoryStatus("loading");
+    fetch(
+      `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${activeStation.lat}&longitude=${activeStation.lng}&hourly=pm2_5&past_days=3&forecast_days=1&timezone=auto`
+    )
+      .then((response) => {
+        if (!response.ok) throw new Error("Historical air-quality request failed");
+        return response.json();
+      })
+      .then((data) => {
+        const points = historyFromHourlyData(data.hourly);
+        if (!points.length) throw new Error("Historical air-quality data unavailable");
+        if (!cancelled) {
+          setHistory(points);
+          setHistoryStatus("live");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHistory([]);
+          setHistoryStatus("error");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStation.lat, activeStation.lng]);
 
   const statusText = {
     loading: "Updating station data...",
@@ -506,16 +554,26 @@ export default function App() {
 
       <section className="insight-row" id="forecast">
         <article className="insight-card">
-          <h3>72-hour NCR forecast</h3>
+          <h3>Last 72 hours at {activeStation.name}</h3>
           <p>
-            The same coupling of meteorology and pollutants used in the live
-            index, projected forward so you can plan travel before the air
-            turns.
+            Real-time PM2.5 observations converted to AQI for the selected
+            station, so you can see how conditions have changed over the last
+            72 hours.
           </p>
+          <div className={`data-status status-${historyStatus}`}>
+            {historyStatus === "loading"
+              ? "Loading 72-hour history..."
+              : historyStatus === "live"
+                ? "Live historical data"
+                : "72-hour history unavailable"}
+          </div>
           <ul className="forecast-list">
-            {FORECAST.map((slot) => (
+            {history.map((slot) => (
               <li key={slot.label}>
-                <span className="forecast-when">{slot.label}</span>
+                <span className="forecast-when">
+                  {slot.label}
+                  <small>{slot.time}</small>
+                </span>
                 <span className={`forecast-aqi tone-${slot.tone}`}>{slot.aqi}</span>
                 <span className="forecast-band">{slot.band}</span>
               </li>
