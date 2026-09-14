@@ -241,7 +241,10 @@ export default function App() {
             aria-pressed={darkMode}
             onClick={() => setDarkMode((enabled) => !enabled)}
           >
-            <span aria-hidden="true">{darkMode ? "☀" : "☾"}</span>
+            <span className="bat-mask" aria-hidden="true">
+              <span className="bat-eye bat-eye-left" />
+              <span className="bat-eye bat-eye-right" />
+            </span>
             {darkMode ? "Light" : "Dark"}
           </button>
         </div>
