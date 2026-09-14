@@ -848,6 +848,7 @@
     0px 4px 4px 0px rgba(0, 0, 0, 0.5),
     inset 0px 4px 4px 0px rgba(0, 0, 0, 0.5);
   padding: 48px 44px 40px;
+  overflow: hidden;
 }
 
 .insight-card h3 {
@@ -1281,6 +1282,40 @@
 
   .metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .insight-card {
+    padding: 28px 20px 30px;
+  }
+
+  .insight-card h3 {
+    font-size: 32px;
+    line-height: 36px;
+  }
+
+  .insight-card > p {
+    margin-top: 16px;
+    font-size: 18px;
+    line-height: 27px;
+  }
+
+  .forecast-list {
+    margin-top: 24px;
+    gap: 12px;
+  }
+
+  .forecast-list li {
+    grid-template-columns: 58px minmax(0, 1fr) auto;
+    height: 68px;
+    padding: 0 16px;
+    border-radius: 26px;
+  }
+
+  .forecast-band {
+    max-width: 112px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .feature-strip {
