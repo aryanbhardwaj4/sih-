@@ -608,8 +608,10 @@
   }
 
   .live-card {
+    width: 100%;
+    min-width: 0;
     height: auto;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     padding-bottom: 32px;
   }
 
@@ -620,6 +622,8 @@
   }
 
   .live-left {
+    width: 100%;
+    min-width: 0;
     align-items: center;
     padding-right: 12px;
   }
@@ -636,13 +640,20 @@
   }
 
   .live-right {
+    width: 100%;
+    min-width: 0;
     padding: 0 16px;
     align-items: center;
   }
 
   .live-controls {
     width: 100%;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .live-controls select,
+  .live-controls input {
+    width: 100%;
   }
 
   .aqi-alert {
@@ -728,5 +739,28 @@
     font-size: 18px;
     height: 56px;
     padding: 0 12px;
+  }
+
+  .live-left {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .gauge-ring {
+    width: min(320px, calc(100vw - 64px));
+    height: min(320px, calc(100vw - 64px));
+  }
+
+  .forecast-list li {
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    padding: 0 16px;
+  }
+
+  .forecast-aqi {
+    font-size: 26px;
+  }
+
+  .forecast-band {
+    font-size: 15px;
   }
 }
