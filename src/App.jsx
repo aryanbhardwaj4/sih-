@@ -131,6 +131,9 @@ function pm25ToUsAqi(pm25) {
 }
 
 export default function App() {
+  const [darkMode, setDarkMode] = useState(() => {
+    return window.localStorage.getItem("delhi-aqi-theme") === "dark";
+  });
   const [stations, setStations] = useState(
     STATIONS.map((station) => ({ ...station, aqi: null }))
   );
@@ -198,6 +201,11 @@ export default function App() {
   const [wrfForecastHour, setWrfForecastHour] = useState(24);
 
   useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+    window.localStorage.setItem("delhi-aqi-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
+
+  useEffect(() => {
     let cancelled = false;
     getWrfChemStatus()
       .then((result) => {
@@ -214,7 +222,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="page">
+    <div className={`page ${darkMode ? "theme-dark" : ""}`}>
       <header className="nav">
         <div className="nav-inner">
           <a className="nav-brand" href="#top">
@@ -226,6 +234,16 @@ export default function App() {
             <a href="#wrf-chem">WRF-Chem</a>
             <a href="#forecast">Forecast</a>
           </nav>
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            aria-pressed={darkMode}
+            onClick={() => setDarkMode((enabled) => !enabled)}
+          >
+            <span aria-hidden="true">{darkMode ? "☀" : "☾"}</span>
+            {darkMode ? "Light" : "Dark"}
+          </button>
         </div>
       </header>
 

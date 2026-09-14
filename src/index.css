@@ -13,6 +13,12 @@ body {
   overflow-x: hidden;
 }
 
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background: #0d1712;
+  color: #f4f7f4;
+}
+
 html {
   scroll-behavior: smooth;
 }
