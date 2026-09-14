@@ -24,6 +24,12 @@ const FORECAST = [
   { label: "+72h", aqi: 184, band: "Moderate", tone: "orange" },
 ];
 
+const STUBBLE_SOURCES = [
+  { name: "Haryana belt", lat: 29.15, lng: 76.65 },
+  { name: "Punjab belt", lat: 30.85, lng: 75.55 },
+  { name: "Western Uttar Pradesh", lat: 28.95, lng: 77.65 },
+];
+
 const assetPath = (path) => `${import.meta.env.BASE_URL}${path}`;
 const reading = (value, suffix = "") =>
   Number.isFinite(value) ? `${Math.round(value)}${suffix}` : "Unavailable";
@@ -38,6 +44,42 @@ function bandForAqi(aqi) {
   return { name: "Severe", color: "#4A148C" };
 }
 
+function grapStageForAqi(aqi) {
+  if (!Number.isFinite(aqi) || aqi < 201) {
+    return { stage: "No GRAP stage", label: "Routine monitoring", color: "#34c759", message: "AQI is below the GRAP activation threshold." };
+  }
+  if (aqi <= 300) return { stage: "Stage I", label: "Poor", color: "#ff8d28", message: "Dust and open-burning controls should be enforced." };
+  if (aqi <= 400) return { stage: "Stage II", label: "Very poor", color: "#e53935", message: "Stricter construction, traffic and generator controls apply." };
+  if (aqi <= 450) return { stage: "Stage III", label: "Severe", color: "#7b1fa2", message: "Emergency measures are recommended for sensitive groups." };
+  return { stage: "Stage IV", label: "Severe+", color: "#4a148c", message: "Severe restrictions and a health emergency response are advised." };
+}
+
+function inversionForHeight(height) {
+  if (!Number.isFinite(height)) return { label: "Unavailable", detail: "Boundary-layer data is unavailable.", color: "#9b9ba3" };
+  if (height < 300) return { label: "Strong", detail: `${Math.round(height)} m mixing height · pollutants trapped near the ground`, color: "#e53935" };
+  if (height < 700) return { label: "Moderate", detail: `${Math.round(height)} m mixing height · limited vertical dispersion`, color: "#ff8d28" };
+  return { label: "Weak", detail: `${Math.round(height)} m mixing height · better vertical dispersion`, color: "#34c759" };
+}
+
+function plumeForStation(station) {
+  const direction = Number(station.windDirection);
+  if (!Number.isFinite(direction)) return { direction: "Unknown", risk: "Waiting for wind data", detail: "A plume path will appear when the station reports wind direction." };
+  const source = STUBBLE_SOURCES.reduce((nearest, candidate) => {
+    const distance = Math.hypot(candidate.lat - station.lat, candidate.lng - station.lng);
+    return distance < nearest.distance ? { candidate, distance } : nearest;
+  }, { candidate: STUBBLE_SOURCES[0], distance: Infinity }).candidate;
+  const compass = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(direction / 45) % 8];
+  const downwind = (direction + 180) % 360;
+  const downwindCompass = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(downwind / 45) % 8];
+  const sourceDistance = Math.hypot(source.lat - station.lat, source.lng - station.lng);
+  const risk = sourceDistance < 1.5 && station.windSpeed < 12 ? "Elevated" : sourceDistance < 3.2 ? "Watch" : "Low";
+  return {
+    direction: `${compass} wind · plume toward ${downwindCompass}`,
+    risk,
+    detail: `${source.name} is the nearest mapped source zone · ${Math.round(station.windSpeed || 0)} km/h wind`,
+  };
+}
+
 function stationWithLiveData(station, data, weather) {
   const pm25 = Number(data.current?.pm2_5);
   const aqi = pm25ToUsAqi(pm25);
@@ -47,6 +89,9 @@ function stationWithLiveData(station, data, weather) {
     temperature: weather.current?.temperature_2m,
     humidity: weather.current?.relative_humidity_2m,
     wind: weather.current?.wind_speed_10m,
+    windSpeed: weather.current?.wind_speed_10m,
+    windDirection: weather.current?.wind_direction_10m,
+    boundaryLayerHeight: weather.current?.boundary_layer_height,
     pm25,
   };
 }
@@ -90,7 +135,7 @@ export default function App() {
           `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${station.lat}&longitude=${station.lng}&current=pm2_5&timezone=auto`
           ),
           fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${station.lat}&longitude=${station.lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m&timezone=auto`
+            `https://api.open-meteo.com/v1/forecast?latitude=${station.lat}&longitude=${station.lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,boundary_layer_height&timezone=auto`
           ),
         ]);
         if (!airResponse.ok || !weatherResponse.ok) {
@@ -126,6 +171,9 @@ export default function App() {
     live: "Live station data",
     error: "Live data unavailable",
   }[dataStatus];
+  const grap = grapStageForAqi(activeStation.aqi);
+  const inversion = inversionForHeight(activeStation.boundaryLayerHeight);
+  const plume = plumeForStation(activeStation);
 
   return (
     <div className="page">
@@ -231,6 +279,20 @@ export default function App() {
                 value={reading(activeStation.pm25, " µg/m³")}
               />
             </div>
+            <div className="feature-strip" aria-label="Atmospheric indicators">
+              <div className="feature-strip-item">
+                <span>Inversion</span>
+                <strong style={{ color: inversion.color }}>{inversion.label}</strong>
+              </div>
+              <div className="feature-strip-item">
+                <span>Stubble plume</span>
+                <strong>{plume.risk}</strong>
+              </div>
+              <div className="feature-strip-item">
+                <span>GRAP</span>
+                <strong style={{ color: grap.color }}>{grap.stage}</strong>
+              </div>
+            </div>
             <div className="scale-bar" aria-hidden="true" />
           </div>
         </article>
@@ -284,6 +346,48 @@ export default function App() {
       </section>
 
       <div className="section-gap" />
+
+      <section className="feature-row" aria-label="Air quality intelligence">
+        <article className="feature-card plume-card">
+          <div className="feature-card-heading">
+            <span className="feature-kicker">Regional smoke movement</span>
+            <span className="feature-status" data-tone={plume.risk.toLowerCase()}>{plume.risk}</span>
+          </div>
+          <h2>Stubble-plume tracker</h2>
+          <p className="feature-value">{plume.direction}</p>
+          <p>{plume.detail}. This directional estimate combines the selected station's wind with mapped crop-burning belts; it is not a fire-detection feed.</p>
+          <div className="plume-compass" style={{ "--plume-angle": `${Number(activeStation.windDirection) || 0}deg` }}>
+            <span className="compass-arrow">↑</span>
+            <span>N</span><span>E</span><span>S</span><span>W</span>
+          </div>
+        </article>
+
+        <article className="feature-card">
+          <div className="feature-card-heading">
+            <span className="feature-kicker">Vertical mixing forecast</span>
+            <span className="feature-status" style={{ color: inversion.color }}>{inversion.label}</span>
+          </div>
+          <h2>Inversion strength indicator</h2>
+          <p className="feature-value" style={{ color: inversion.color }}>{inversion.label} inversion</p>
+          <p>{inversion.detail}. A stronger inversion means less vertical mixing, so the same emissions can produce a faster AQI rise.</p>
+          <div className="indicator-bar"><span style={{ width: inversion.label === "Strong" ? "88%" : inversion.label === "Moderate" ? "55%" : "24%", background: inversion.color }} /></div>
+          <small>Based on Open-Meteo boundary-layer height for {activeStation.name}.</small>
+        </article>
+
+        <article className="feature-card grap-card" style={{ "--grap-color": grap.color }}>
+          <div className="feature-card-heading">
+            <span className="feature-kicker">CPCB response monitor</span>
+            <span className="feature-status">{grap.stage}</span>
+          </div>
+          <h2>GRAP alert system</h2>
+          <p className="feature-value">{grap.label}</p>
+          <p>{grap.message}</p>
+          <div className="grap-alert" role="status">
+            <strong>{Number.isFinite(activeStation.aqi) ? `AQI ${activeStation.aqi}` : "AQI unavailable"}</strong>
+            <span>{grap.stage === "No GRAP stage" ? "Keep monitoring local conditions." : "Alert active for the selected station."}</span>
+          </div>
+        </article>
+      </section>
 
       <section className="insight-row" id="forecast">
         <article className="insight-card">
