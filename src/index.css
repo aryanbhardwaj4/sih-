@@ -10,6 +10,7 @@ body {
   padding: 0;
   background: #ffffff;
   color: #000000;
+  overflow-x: hidden;
 }
 
 html {
