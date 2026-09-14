@@ -143,9 +143,6 @@ function historyFromHourlyData(hourly) {
     const date = new Date(point.time);
     return {
       label: hoursAgo === 0 ? "Now" : `-${hoursAgo}h`,
-      time: hoursAgo === 0
-        ? "Latest reading"
-        : date.toLocaleString([], { weekday: "short", hour: "numeric" }),
       aqi: point.aqi,
       band: bandForAqi(point.aqi).name,
       tone: point.aqi > 200 ? "red" : "orange",
@@ -576,10 +573,7 @@ export default function App() {
           <ul className="forecast-list">
             {history.map((slot) => (
               <li key={slot.label}>
-                <span className="forecast-when">
-                  {slot.label}
-                  <small>{slot.time}</small>
-                </span>
+                <span className="forecast-when">{slot.label}</span>
                 <span className={`forecast-aqi tone-${slot.tone}`}>{slot.aqi}</span>
                 <span className="forecast-band">{slot.band}</span>
               </li>
