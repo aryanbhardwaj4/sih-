@@ -570,15 +570,17 @@ export default function App() {
                 ? "Live historical data"
                 : "72-hour history unavailable"}
           </div>
-          <ul className="forecast-list">
-            {history.map((slot) => (
-              <li key={slot.label}>
-                <span className="forecast-when">{slot.label}</span>
-                <span className={`forecast-aqi tone-${slot.tone}`}>{slot.aqi}</span>
-                <span className="forecast-band">{slot.band}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="forecast-scroll" tabIndex="0" aria-label="Scrollable 72-hour air quality history">
+            <ul className="forecast-list">
+              {history.map((slot) => (
+                <li key={slot.label}>
+                  <span className="forecast-when">{slot.label}</span>
+                  <span className={`forecast-aqi tone-${slot.tone}`}>{slot.aqi}</span>
+                  <span className="forecast-band">{slot.band}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </article>
 
         <article className="insight-card">
