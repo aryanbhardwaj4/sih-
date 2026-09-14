@@ -91,7 +91,7 @@ function plumeForStation(station) {
 
 async function getWrfChemStatus() {
   const endpoint = import.meta.env.VITE_WRFCHEM_API_URL;
-  if (!endpoint) return { mode: "framework", status: "Model API not configured" };
+  if (!endpoint) return { mode: "framework", status: "Framework mode" };
   const response = await fetch(`${endpoint.replace(/\/$/, "")}/health`);
   if (!response.ok) throw new Error("WRF-Chem service is unavailable");
   return { mode: "live", status: "WRF-Chem service connected" };
