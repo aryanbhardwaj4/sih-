@@ -944,7 +944,12 @@
 }
 
 .theme-dark .gauge-ring {
-  background: var(--dark-surface);
+  background: #ffffff;
+}
+
+.theme-dark .gauge-value,
+.theme-dark .gauge-label {
+  color: #000000;
 }
 
 .theme-dark .nav-links a,
