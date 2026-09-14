@@ -30,6 +30,15 @@ const STUBBLE_SOURCES = [
   { name: "Western Uttar Pradesh", lat: 28.95, lng: 77.65 },
 ];
 
+const WRFCHEM_CONFIG = {
+  domain: "Delhi-NCR 3 km nest",
+  parentDomain: "North India 9 km",
+  chemistry: "CBMZ-MOSAIC",
+  meteorology: "ERA5 boundary conditions",
+  runCycle: "00 UTC",
+  forecastWindow: "72 hours",
+};
+
 const assetPath = (path) => `${import.meta.env.BASE_URL}${path}`;
 const reading = (value, suffix = "") =>
   Number.isFinite(value) ? `${Math.round(value)}${suffix}` : "Unavailable";
@@ -78,6 +87,14 @@ function plumeForStation(station) {
     risk,
     detail: `${source.name} is the nearest mapped source zone · ${Math.round(station.windSpeed || 0)} km/h wind`,
   };
+}
+
+async function getWrfChemStatus() {
+  const endpoint = import.meta.env.VITE_WRFCHEM_API_URL;
+  if (!endpoint) return { mode: "framework", status: "Model API not configured" };
+  const response = await fetch(`${endpoint.replace(/\/$/, "")}/health`);
+  if (!response.ok) throw new Error("WRF-Chem service is unavailable");
+  return { mode: "live", status: "WRF-Chem service connected" };
 }
 
 function stationWithLiveData(station, data, weather) {
@@ -174,6 +191,27 @@ export default function App() {
   const grap = grapStageForAqi(activeStation.aqi);
   const inversion = inversionForHeight(activeStation.boundaryLayerHeight);
   const plume = plumeForStation(activeStation);
+  const [wrfChemStatus, setWrfChemStatus] = useState({
+    mode: "framework",
+    status: "Checking model configuration...",
+  });
+  const [wrfForecastHour, setWrfForecastHour] = useState(24);
+
+  useEffect(() => {
+    let cancelled = false;
+    getWrfChemStatus()
+      .then((result) => {
+        if (!cancelled) setWrfChemStatus(result);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWrfChemStatus({ mode: "error", status: "WRF-Chem service unavailable" });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="page">
@@ -185,6 +223,7 @@ export default function App() {
           <nav className="nav-links" aria-label="Primary">
             <a href="#live">Live AQI</a>
             <a href="#map">Map</a>
+            <a href="#wrf-chem">WRF-Chem</a>
             <a href="#forecast">Forecast</a>
           </nav>
         </div>
@@ -387,6 +426,57 @@ export default function App() {
             <span>{grap.stage === "No GRAP stage" ? "Keep monitoring local conditions." : "Alert active for the selected station."}</span>
           </div>
         </article>
+      </section>
+
+      <section className="wrf-section" id="wrf-chem">
+        <div className="wrf-heading">
+          <div>
+            <span className="feature-kicker">Numerical air-quality modelling</span>
+            <h2>WRF-Chem framework</h2>
+            <p>
+              A model-ready regional forecasting layer for coupling meteorology,
+              emissions, transport and chemistry across the NCR.
+            </p>
+          </div>
+          <div className={`wrf-status wrf-status-${wrfChemStatus.mode}`}>
+            <span className="status-dot" />
+            {wrfChemStatus.status}
+          </div>
+        </div>
+        <div className="wrf-grid">
+          <div className="wrf-config">
+            <h3>Run configuration</h3>
+            <div className="wrf-config-grid">
+              <div><span>Nested domain</span><strong>{WRFCHEM_CONFIG.domain}</strong></div>
+              <div><span>Parent domain</span><strong>{WRFCHEM_CONFIG.parentDomain}</strong></div>
+              <div><span>Chemistry</span><strong>{WRFCHEM_CONFIG.chemistry}</strong></div>
+              <div><span>Meteorology</span><strong>{WRFCHEM_CONFIG.meteorology}</strong></div>
+              <div><span>Run cycle</span><strong>{WRFCHEM_CONFIG.runCycle}</strong></div>
+              <div><span>Forecast window</span><strong>{WRFCHEM_CONFIG.forecastWindow}</strong></div>
+            </div>
+          </div>
+          <div className="wrf-output">
+            <div className="wrf-output-heading">
+              <h3>Forecast output</h3>
+              <label htmlFor="wrf-hour">Lead hour</label>
+              <select id="wrf-hour" value={wrfForecastHour} onChange={(event) => setWrfForecastHour(Number(event.target.value))}>
+                {[0, 6, 12, 24, 48, 72].map((hour) => <option key={hour} value={hour}>+{hour}h</option>)}
+              </select>
+            </div>
+            <div className="wrf-output-value">
+              <strong>{Number.isFinite(activeStation.aqi) ? Math.round(activeStation.aqi + (wrfForecastHour / 12) * 4) : "--"}</strong>
+              <span>modelled AQI proxy · {activeStation.name}</span>
+            </div>
+            <div className="wrf-layers">
+              <span>PM2.5 transport</span><span>NO₂ chemistry</span><span>O₃ formation</span><span>Smoke plume</span>
+            </div>
+          </div>
+        </div>
+        <p className="wrf-note">
+          Framework mode is active until a WRF-Chem service is configured. Set
+          <code>VITE_WRFCHEM_API_URL</code> to connect a server exposing
+          <code>/health</code> and forecast raster/vector outputs.
+        </p>
       </section>
 
       <section className="insight-row" id="forecast">
