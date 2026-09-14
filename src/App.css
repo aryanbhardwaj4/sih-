@@ -943,9 +943,14 @@
   color: #f4f7f4;
 }
 
+.theme-dark .gauge-ring {
+  background: var(--dark-surface);
+}
+
 .theme-dark .nav-links a,
 .theme-dark .gauge-value,
 .theme-dark .gauge-label,
+.theme-dark .live-pill,
 .theme-dark .metric-title,
 .theme-dark .metric-value,
 .theme-dark .map-sub,
@@ -1019,6 +1024,11 @@
 .theme-dark .scale-bar,
 .theme-dark .indicator-bar {
   background: #2a4031;
+}
+
+.theme-dark .metric-icon-wrap img,
+.theme-dark .advice-icon img {
+  filter: brightness(0) invert(1);
 }
 
 .theme-dark .footer {
