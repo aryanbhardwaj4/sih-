@@ -4,17 +4,17 @@ import "leaflet/dist/leaflet.css";
 import "./App.css";
 
 const STATIONS = [
-  { id: "anand-vihar", name: "Anand Vihar", aqi: 186, lat: 28.6469, lng: 77.3162, temperature: 32, humidity: 54, wind: 9, pm25: 62 },
-  { id: "rk-puram", name: "R.K. Puram", aqi: 142, lat: 28.5634, lng: 77.1762, temperature: 31, humidity: 52, wind: 10, pm25: 55 },
-  { id: "dwarka", name: "Dwarka", aqi: 128, lat: 28.5921, lng: 77.046, temperature: 30, humidity: 49, wind: 12, pm25: 44 },
-  { id: "ito", name: "ITO", aqi: 157, lat: 28.628, lng: 77.241, temperature: 32, humidity: 54, wind: 9, pm25: 58 },
-  { id: "noida", name: "Noida Sec 62", aqi: 171, lat: 28.627, lng: 77.3649, temperature: 33, humidity: 56, wind: 8, pm25: 64 },
-  { id: "punjabi-bagh", name: "Punjabi Bagh", aqi: 164, lat: 28.674, lng: 77.131, temperature: 32, humidity: 53, wind: 10, pm25: 60 },
-  { id: "mandir-marg", name: "Mandir Marg", aqi: 149, lat: 28.636, lng: 77.202, temperature: 31, humidity: 51, wind: 11, pm25: 52 },
-  { id: "rohini", name: "Rohini", aqi: 177, lat: 28.732, lng: 77.096, temperature: 32, humidity: 55, wind: 8, pm25: 67 },
-  { id: "ghaziabad", name: "Ghaziabad", aqi: 193, lat: 28.669, lng: 77.4538, temperature: 33, humidity: 58, wind: 7, pm25: 72 },
-  { id: "faridabad-sector-16", name: "Faridabad Sector 16", aqi: 181, lat: 28.433, lng: 77.316, temperature: 33, humidity: 57, wind: 8, pm25: 68 },
-  { id: "faridabad-ballabgarh", name: "Faridabad Ballabgarh", aqi: 174, lat: 28.340, lng: 77.317, temperature: 33, humidity: 59, wind: 7, pm25: 65 },
+  { id: "anand-vihar", name: "Anand Vihar", lat: 28.6469, lng: 77.3162 },
+  { id: "rk-puram", name: "R.K. Puram", lat: 28.5634, lng: 77.1762 },
+  { id: "dwarka", name: "Dwarka", lat: 28.5921, lng: 77.046 },
+  { id: "ito", name: "ITO", lat: 28.628, lng: 77.241 },
+  { id: "noida", name: "Noida Sec 62", lat: 28.627, lng: 77.3649 },
+  { id: "punjabi-bagh", name: "Punjabi Bagh", lat: 28.674, lng: 77.131 },
+  { id: "mandir-marg", name: "Mandir Marg", lat: 28.636, lng: 77.202 },
+  { id: "rohini", name: "Rohini", lat: 28.732, lng: 77.096 },
+  { id: "ghaziabad", name: "Ghaziabad", lat: 28.669, lng: 77.4538 },
+  { id: "faridabad-sector-16", name: "Faridabad Sector 16", lat: 28.433, lng: 77.316 },
+  { id: "faridabad-ballabgarh", name: "Faridabad Ballabgarh", lat: 28.340, lng: 77.317 },
 ];
 
 const FORECAST = [
@@ -25,8 +25,11 @@ const FORECAST = [
 ];
 
 const assetPath = (path) => `${import.meta.env.BASE_URL}${path}`;
+const reading = (value, suffix = "") =>
+  Number.isFinite(value) ? `${Math.round(value)}${suffix}` : "Unavailable";
 
 function bandForAqi(aqi) {
+  if (!Number.isFinite(aqi)) return { name: "Unavailable", color: "#9b9ba3" };
   if (aqi <= 50) return { name: "Good", color: "#34C759" };
   if (aqi <= 100) return { name: "Satisfactory", color: "#A8E05F" };
   if (aqi <= 200) return { name: "Moderate", color: "#FF8D28" };
@@ -35,46 +38,69 @@ function bandForAqi(aqi) {
   return { name: "Severe", color: "#4A148C" };
 }
 
-function stationWithLiveData(station, payload) {
-  const data = payload.data;
-  const iaqi = data.iaqi || {};
-  const aqi = Number(data.aqi);
-
+function stationWithLiveData(station, data, weather) {
+  const pm25 = Number(data.current?.pm2_5);
+  const aqi = pm25ToUsAqi(pm25);
   return {
     ...station,
-    aqi: Number.isFinite(aqi) ? aqi : station.aqi,
-    temperature: iaqi.t?.v ?? station.temperature,
-    humidity: iaqi.h?.v ?? station.humidity,
-    wind: iaqi.w?.v ? Math.round(iaqi.w.v * 3.6) : station.wind,
-    pm25: iaqi.pm25?.v ?? station.pm25,
+    aqi,
+    temperature: weather.current?.temperature_2m,
+    humidity: weather.current?.relative_humidity_2m,
+    wind: weather.current?.wind_speed_10m,
+    pm25,
   };
 }
 
+function pm25ToUsAqi(pm25) {
+  if (!Number.isFinite(pm25)) return null;
+  const breakpoints = [
+    [0, 12, 0, 50],
+    [12.1, 35.4, 51, 100],
+    [35.5, 55.4, 101, 150],
+    [55.5, 150.4, 151, 200],
+    [150.5, 250.4, 201, 300],
+    [250.5, 350.4, 301, 400],
+    [350.5, 500.4, 401, 500],
+  ];
+  const match = breakpoints.find(([low, high]) => pm25 >= low && pm25 <= high);
+  if (!match) return null;
+  const [low, high, aqiLow, aqiHigh] = match;
+  return Math.round(((aqiHigh - aqiLow) / (high - low)) * (pm25 - low) + aqiLow);
+}
+
 export default function App() {
-  const [stations, setStations] = useState(STATIONS);
+  const [stations, setStations] = useState(
+    STATIONS.map((station) => ({ ...station, aqi: null }))
+  );
   const [activeStationId, setActiveStationId] = useState(STATIONS[0].id);
   const [alertLimit, setAlertLimit] = useState(150);
-  const [dataStatus, setDataStatus] = useState("mock");
+  const [dataStatus, setDataStatus] = useState("loading");
   const activeStation = stations.find((station) => station.id === activeStationId) || stations[0];
   const live = useMemo(() => bandForAqi(activeStation.aqi), [activeStation.aqi]);
   const alertActive = activeStation.aqi >= alertLimit;
 
   useEffect(() => {
-    const token = import.meta.env.VITE_WAQI_TOKEN;
-    if (!token) return undefined;
-
     let cancelled = false;
     setDataStatus("loading");
 
     Promise.all(
       STATIONS.map(async (station) => {
-        const response = await fetch(
-          `https://api.waqi.info/feed/geo:${station.lat};${station.lng}/?token=${token}`
-        );
-        if (!response.ok) throw new Error(`Station request failed: ${response.status}`);
-        const payload = await response.json();
-        if (payload.status !== "ok" || !payload.data) throw new Error("Station data unavailable");
-        return stationWithLiveData(station, payload);
+        const [airResponse, weatherResponse] = await Promise.all([
+          fetch(
+          `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${station.lat}&longitude=${station.lng}&current=pm2_5&timezone=auto`
+          ),
+          fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${station.lat}&longitude=${station.lng}&current=temperature_2m,relative_humidity_2m,wind_speed_10m&timezone=auto`
+          ),
+        ]);
+        if (!airResponse.ok || !weatherResponse.ok) {
+          throw new Error("Station request failed");
+        }
+        const [airData, weatherData] = await Promise.all([
+          airResponse.json(),
+          weatherResponse.json(),
+        ]);
+        return stationWithLiveData(station, airData, weatherData);
       })
     )
       .then((liveStations) => {
@@ -84,7 +110,10 @@ export default function App() {
         }
       })
       .catch(() => {
-        if (!cancelled) setDataStatus("error");
+        if (!cancelled) {
+          setStations(STATIONS.map((station) => ({ ...station, aqi: null })));
+          setDataStatus("error");
+        }
       });
 
     return () => {
@@ -95,8 +124,7 @@ export default function App() {
   const statusText = {
     loading: "Updating station data...",
     live: "Live station data",
-    mock: "Demo station data",
-    error: "Live data unavailable - showing demo data",
+    error: "Live data unavailable",
   }[dataStatus];
 
   return (
@@ -134,7 +162,7 @@ export default function App() {
             </div>
             <div className="gauge" aria-label={`AQI ${activeStation.aqi}, ${live.name}`}>
               <div className="gauge-ring" style={{ borderColor: live.color }}>
-                <div className="gauge-value">{activeStation.aqi}</div>
+                <div className="gauge-value">{activeStation.aqi ?? "--"}</div>
                 <div className="gauge-label">{live.name.toLowerCase()}</div>
               </div>
             </div>
@@ -181,17 +209,17 @@ export default function App() {
               <Metric
                 icon={assetPath("figma/icon-temperature.svg")}
                 title="Temperature"
-                value={`${activeStation.temperature}°C`}
+                value={reading(activeStation.temperature, "°C")}
               />
               <Metric
                 icon={assetPath("figma/icon-humidity.svg")}
                 title="Humidity"
-                value={`${activeStation.humidity}%`}
+                value={reading(activeStation.humidity, "%")}
               />
               <Metric
                 icon={assetPath("figma/icon-wind.svg")}
                 title="Wind speed"
-                value={`${activeStation.wind} km/h`}
+                value={reading(activeStation.wind, " km/h")}
               />
               <Metric
                 icon={assetPath("figma/icon-pm25.svg")}
@@ -200,7 +228,7 @@ export default function App() {
                     PM2.<span className="pm-five">5</span>
                   </span>
                 }
-                value={`${activeStation.pm25} µg/m³`}
+                value={reading(activeStation.pm25, " µg/m³")}
               />
             </div>
             <div className="scale-bar" aria-hidden="true" />
