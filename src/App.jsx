@@ -126,14 +126,20 @@ function pm25ToUsAqi(pm25) {
 function historyFromHourlyData(hourly) {
   const times = hourly?.time || [];
   const pm25Values = hourly?.pm2_5 || [];
+  const now = Date.now();
   const available = times
-    .map((time, index) => ({ time, aqi: pm25ToUsAqi(Number(pm25Values[index])) }))
+    .map((time, index) => ({
+      time,
+      timestamp: new Date(time).getTime(),
+      aqi: pm25ToUsAqi(Number(pm25Values[index])),
+    }))
+    .filter((point) => point.timestamp <= now)
     .filter((point) => Number.isFinite(point.aqi));
   if (!available.length) return [];
 
   const latestIndex = available.length - 1;
   return [72, 48, 24, 0].map((hoursAgo) => {
-    const point = available[Math.max(0, latestIndex - hoursAgo)];
+    const point = available[Math.max(0, latestIndex - (hoursAgo * 1))];
     const date = new Date(point.time);
     return {
       label: hoursAgo === 0 ? "Now" : `-${hoursAgo}h`,

@@ -1200,6 +1200,11 @@
     width: 100%;
   }
 
+  .insight-card h3 {
+    font-size: 34px;
+    line-height: 40px;
+  }
+
   .map-frame {
     height: 420px;
     max-width: 100%;
@@ -1323,6 +1328,26 @@
   .forecast-list li {
     grid-template-columns: 56px minmax(0, 1fr) auto;
     padding: 0 16px;
+  }
+
+  .forecast-list {
+    width: 100%;
+  }
+
+  .forecast-list li {
+    min-width: 0;
+  }
+
+  .forecast-when {
+    font-size: 17px;
+  }
+
+  .forecast-aqi {
+    font-size: 28px;
+  }
+
+  .forecast-band {
+    font-size: 15px;
   }
 
   .forecast-aqi {
