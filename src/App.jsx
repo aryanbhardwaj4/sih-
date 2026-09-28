@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CircleMarker, MapContainer, Popup, TileLayer } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
+import { runGnnLstmForecast } from "./gnnLstm";
 
 const STATIONS = [
   { id: "anand-vihar", name: "Anand Vihar", lat: 28.6469, lng: 77.3162 },
@@ -22,15 +23,6 @@ const STUBBLE_SOURCES = [
   { name: "Punjab belt", lat: 30.85, lng: 75.55 },
   { name: "Western Uttar Pradesh", lat: 28.95, lng: 77.65 },
 ];
-
-const WRFCHEM_CONFIG = {
-  domain: "Delhi-NCR 3 km nest",
-  parentDomain: "North India 9 km",
-  chemistry: "CBMZ-MOSAIC",
-  meteorology: "ERA5 boundary conditions",
-  runCycle: "00 UTC",
-  forecastWindow: "72 hours",
-};
 
 const assetPath = (path) => `${import.meta.env.BASE_URL}${path}`;
 const reading = (value, suffix = "") =>
@@ -80,14 +72,6 @@ function plumeForStation(station) {
     risk,
     detail: `${source.name} is the nearest mapped source zone · ${Math.round(station.windSpeed || 0)} km/h wind`,
   };
-}
-
-async function getWrfChemStatus() {
-  const endpoint = import.meta.env.VITE_WRFCHEM_API_URL;
-  if (!endpoint) return { mode: "framework", status: "Framework mode" };
-  const response = await fetch(`${endpoint.replace(/\/$/, "")}/health`);
-  if (!response.ok) throw new Error("WRF-Chem service is unavailable");
-  return { mode: "live", status: "WRF-Chem service connected" };
 }
 
 function stationWithLiveData(station, data, weather) {
@@ -165,6 +149,10 @@ export default function App() {
   const activeStation = stations.find((station) => station.id === activeStationId) || stations[0];
   const live = useMemo(() => bandForAqi(activeStation.aqi), [activeStation.aqi]);
   const alertActive = activeStation.aqi >= alertLimit;
+  const gnnLstm = useMemo(
+    () => runGnnLstmForecast(stations, activeStationId, history),
+    [stations, activeStationId, history]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -245,32 +233,10 @@ export default function App() {
   const grap = grapStageForAqi(activeStation.aqi);
   const inversion = inversionForHeight(activeStation.boundaryLayerHeight);
   const plume = plumeForStation(activeStation);
-  const [wrfChemStatus, setWrfChemStatus] = useState({
-    mode: "framework",
-    status: "Checking model configuration...",
-  });
-  const [wrfForecastHour, setWrfForecastHour] = useState(24);
-
   useEffect(() => {
     document.documentElement.dataset.theme = darkMode ? "dark" : "light";
     window.localStorage.setItem("delhi-aqi-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
-
-  useEffect(() => {
-    let cancelled = false;
-    getWrfChemStatus()
-      .then((result) => {
-        if (!cancelled) setWrfChemStatus(result);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setWrfChemStatus({ mode: "error", status: "WRF-Chem service unavailable" });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   return (
     <div className={`page ${darkMode ? "theme-dark" : ""}`}>
@@ -282,7 +248,7 @@ export default function App() {
           <nav className="nav-links" aria-label="Primary">
             <a href="#live">Live AQI</a>
             <a href="#map">Map</a>
-            <a href="#wrf-chem">WRF-Chem</a>
+            <a href="#gnn-lstm">GNN + LSTM</a>
             <a href="#forecast">Forecast</a>
           </nav>
           <button
@@ -504,54 +470,57 @@ export default function App() {
         </article>
       </section>
 
-      <section className="wrf-section" id="wrf-chem">
-        <div className="wrf-heading">
+      <section className="gnn-lstm-section" id="gnn-lstm">
+        <div className="gnn-lstm-heading">
           <div>
-            <span className="feature-kicker">Numerical air-quality modelling</span>
-            <h2>WRF-Chem framework</h2>
+            <span className="feature-kicker">Spatiotemporal AQI forecasting</span>
+            <h2>GNN + LSTM model</h2>
             <p>
-              A model-ready regional forecasting layer for coupling meteorology,
-              emissions, transport and chemistry across the NCR.
+              The graph layer learns a regional signal from nearby stations;
+              the recurrent layer carries the selected station's live history
+              forward across the next 72 hours.
             </p>
           </div>
-          <div className={`wrf-status wrf-status-${wrfChemStatus.mode}`}>
+          <div className={`gnn-lstm-status ${gnnLstm.ready ? "is-ready" : ""}`}>
             <span className="status-dot" />
-            {wrfChemStatus.status}
+            {gnnLstm.ready ? "Inference ready" : "Waiting for live history"}
           </div>
         </div>
-        <div className="wrf-grid">
-          <div className="wrf-config">
-            <h3>Run configuration</h3>
-            <div className="wrf-config-grid">
-              <div><span>Nested domain</span><strong>{WRFCHEM_CONFIG.domain}</strong></div>
-              <div><span>Parent domain</span><strong>{WRFCHEM_CONFIG.parentDomain}</strong></div>
-              <div><span>Chemistry</span><strong>{WRFCHEM_CONFIG.chemistry}</strong></div>
-              <div><span>Meteorology</span><strong>{WRFCHEM_CONFIG.meteorology}</strong></div>
-              <div><span>Run cycle</span><strong>{WRFCHEM_CONFIG.runCycle}</strong></div>
-              <div><span>Forecast window</span><strong>{WRFCHEM_CONFIG.forecastWindow}</strong></div>
+        <div className="gnn-lstm-grid">
+          <div className="gnn-lstm-output">
+            <div className="gnn-lstm-output-heading">
+              <h3>72-hour prediction</h3>
+              <span>{activeStation.name}</span>
+            </div>
+            <div className="gnn-lstm-predictions">
+              {gnnLstm.predictions.map((prediction) => (
+                <div className="gnn-lstm-prediction" key={prediction.hours}>
+                  <span>+{prediction.hours}h</span>
+                  <strong className={`forecast-aqi tone-${prediction.tone}`}>{prediction.aqi}</strong>
+                  <small>{prediction.band}</small>
+                </div>
+              ))}
+              {!gnnLstm.predictions.length && <p className="gnn-lstm-empty">Live station history is required before the model can infer a forecast.</p>}
             </div>
           </div>
-          <div className="wrf-output">
-            <div className="wrf-output-heading">
-              <h3>Forecast output</h3>
-              <label htmlFor="wrf-hour">Lead hour</label>
-              <select id="wrf-hour" value={wrfForecastHour} onChange={(event) => setWrfForecastHour(Number(event.target.value))}>
-                {[0, 6, 12, 24, 48, 72].map((hour) => <option key={hour} value={hour}>+{hour}h</option>)}
-              </select>
+          <div className="gnn-lstm-graph">
+            <h3>Graph context</h3>
+            <p>Nearest live stations used by the spatial aggregation layer.</p>
+            <div className="gnn-lstm-neighbors">
+              {gnnLstm.neighbors.map((neighbor) => (
+                <span key={neighbor.id}>{neighbor.name} · {Math.round(neighbor.aqi)}</span>
+              ))}
             </div>
-            <div className="wrf-output-value">
-              <strong>{Number.isFinite(activeStation.aqi) ? Math.round(activeStation.aqi + (wrfForecastHour / 12) * 4) : "--"}</strong>
-              <span>modelled AQI proxy · {activeStation.name}</span>
-            </div>
-            <div className="wrf-layers">
-              <span>PM2.5 transport</span><span>NO₂ chemistry</span><span>O₃ formation</span><span>Smoke plume</span>
+            <div className="gnn-lstm-signal">
+              <span>Weighted regional AQI</span>
+              <strong>{gnnLstm.graphSignal ?? "--"}</strong>
             </div>
           </div>
         </div>
-        <p className="wrf-note">
-          Framework mode is active until a WRF-Chem service is configured. Set
-          <code>VITE_WRFCHEM_API_URL</code> to connect a server exposing
-          <code>/health</code> and forecast raster/vector outputs.
+        <p className="gnn-lstm-note">
+          Browser inference prototype using live station graph features and
+          history. Replace the model weights in <code>src/gnnLstm.js</code> with
+          trained weights before using this as a validated public forecast.
         </p>
       </section>
 
